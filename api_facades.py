@@ -7,6 +7,10 @@ from datetime import datetime, timedelta, timezone
 import re
 from pdf_reader import PDFHandler
 from biorxiv_updater import BioRxivCache
+import os
+from dotenv import load_dotenv
+from query_builder import QueryBuilder
+from llms import GeminiProvider
 
 class ArXivAPIAdapter:
     BASE_URL = 'https://export.arxiv.org/api/query?'
@@ -123,18 +127,63 @@ class BioRxivAPIAdapter:
         return (score, arxiv_id, entry['title'], entry['abstract'], view_url, pdf_url, authors)
 
 def main():
-    search_query = 'deep learning'
-    print(f"Using search query: {search_query}")
+    # Load environment variables
+    load_dotenv()
 
-    biorxiv_adapter = BioRxivAPIAdapter(search_query)
+    # Get the API key from the environment variable
+    api_key = os.getenv('API_KEY')
+    if not api_key:
+        raise ValueError("API_KEY not found in environment variables")
+
+    # Initialize the LLM provider and QueryBuilder
+    llm_provider = GeminiProvider(api_key)
+    query_builder = QueryBuilder(llm_provider)
+
+    # User's research interest
+    user_interest = "I'm interested in BCI, deep learning and neuroscience"
+    print(f"User interest: {user_interest}")
+
+    # Generate queries
+    arxiv_query = query_builder.build_arxiv_query(user_interest)
+    biorxiv_query = query_builder.build_biorxiv_query(user_interest)
+
+    print(f"arXiv query: {arxiv_query}")
+    print(f"bioRxiv query: {biorxiv_query}")
+
+    # Fetch from arXiv
+    arxiv_adapter = ArXivAPIAdapter(search_query=arxiv_query)
+    arxiv_articles = arxiv_adapter.fetch(time_window='week', max_results=None)
+    
+    # If no results, try fallback query
+    if not arxiv_articles:
+        fallback_query = query_builder.build_fallback_query(user_interest)
+        print(f"Fallback arXiv query: {fallback_query}")
+        arxiv_adapter = ArXivAPIAdapter(search_query=fallback_query)
+        arxiv_articles = arxiv_adapter.fetch(time_window='week', max_results=None)
+
+    print(f"\nTotal arXiv articles fetched: {len(arxiv_articles)}")
+    for article in arxiv_articles[:3]:
+        print(f"Title: {article[1]}")
+        print(f"URL: {article[3]}")
+        print("---")
+
+    # Fetch from bioRxiv
+    biorxiv_adapter = BioRxivAPIAdapter(search_query=biorxiv_query)
     biorxiv_articles = biorxiv_adapter.fetch(max_results=None)
     
+    # If no results, try fallback query
+    if not biorxiv_articles:
+        fallback_query = query_builder.build_fallback_query(user_interest)
+        print(f"Fallback bioRxiv query: {fallback_query}")
+        biorxiv_adapter = BioRxivAPIAdapter(search_query=fallback_query)
+        biorxiv_articles = biorxiv_adapter.fetch(max_results=None)
+
     print(f"\nTotal bioRxiv articles fetched: {len(biorxiv_articles)}")
     for article in biorxiv_articles[:3]:
         print(f"Title: {article[2]}")
         print(f"Score: {article[0]}")
         print(f"URL: {article[4]}")
-        print("---\n")
+        print("---")
 
 if __name__ == "__main__":
     main()

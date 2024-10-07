@@ -1,4 +1,7 @@
 from abc import ABC, abstractmethod
+import google.generativeai as genai
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from google.api_core.exceptions import ResourceExhausted
 
 
 class LLMProvider(ABC):
@@ -31,11 +34,19 @@ class AnthropicProvider(LLMProvider):
 
 class GeminiProvider(LLMProvider):
     def __init__(self, api_key: str):
-        import google.generativeai as genai
         genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel("gemini-1.5-pro-latest")
+        self.model = genai.GenerativeModel("gemini-1.0-pro-latest")
 
+    @retry(
+        stop=stop_after_attempt(15),
+        wait=wait_exponential(multiplier=2, min=4, max=10),
+        retry=retry_if_exception_type(ResourceExhausted),
+        reraise=True
+    )
     def generate_query(self, prompt: str) -> str:
-        # Placeholder for actual Gemini API call
-        return self.model.generate_content(prompt).text
+        try:
+            return self.model.generate_content(prompt).text
+        except ResourceExhausted as e:
+            print(f"Rate limit exceeded. Retrying... (Error: {e})")
+            raise
 
