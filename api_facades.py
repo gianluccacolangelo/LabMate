@@ -86,62 +86,55 @@ class ArXivAPIAdapter:
 
 class BioRxivAPIAdapter:
     def __init__(self, search_query):
-        # Split the query by 'OR' and strip whitespace
-        self.search_phrases = [phrase.strip().lower() for phrase in search_query.split('OR')]
-        print(f"Search phrases: {self.search_phrases}")
+        self.search_terms = self._parse_search_query(search_query)
         self.cache = BioRxivCache()
 
-    def fetch(self, time_window='week', max_results=None):
-        results = []
+    def _parse_search_query(self, query):
+        # Split by OR first, then by AND
+        or_terms = [term.strip() for term in query.split('OR')]
+        return [term.lower().split('AND') for term in or_terms]
+
+    def fetch(self, max_results=None):
         all_articles = self.cache.get_articles()
-        print(f"Searching through {len(all_articles)} articles")
+        results = []
+
         for entry in all_articles:
             score = self._calculate_score(entry)
             if score > 0:
-                arxiv_id = entry['doi'].split('/')[-1]
-                title = entry['title']
-                abstract = entry['abstract']
-                view_url = f"https://www.biorxiv.org/content/{entry['doi']}v{entry['version']}"
-                pdf_url = f"{view_url}.full.pdf"
-                authors = [(author, 'Not provided') for author in entry['authors'].split('; ')]
-                
-                results.append((score, arxiv_id, title, abstract, view_url, pdf_url, authors))
+                result = self._format_article(entry, score)
+                results.append(result)
 
-        print(f"Found {len(results)} matching articles")
-        # Sort results by score in descending order
         results.sort(key=lambda x: x[0], reverse=True)
-
-        if max_results:
-            results = results[:max_results]
-
-        print(f"Total bioRxiv articles fetched: {len(results)}")
-        return [result[1:] for result in results]  # Remove the score from the final results
+        return results[:max_results] if max_results else results
 
     def _calculate_score(self, entry):
-        text = (entry['title'] + ' ' + entry['abstract']).lower()
-        score = sum(any(word in text for word in phrase.split()) for phrase in self.search_phrases)
-        if score > 0:
-            print(f"Matched article: {entry['title']} (Score: {score})")
-        return score
+        text = f"{entry['title']} {entry['abstract']}".lower()
+        
+        def check_and_terms(and_terms):
+            return all(term in text for term in and_terms)
+        
+        return sum(check_and_terms(and_terms) for and_terms in self.search_terms)
+
+    def _format_article(self, entry, score):
+        arxiv_id = entry['doi'].split('/')[-1]
+        view_url = f"https://www.biorxiv.org/content/{entry['doi']}v{entry['version']}"
+        pdf_url = f"{view_url}.full.pdf"
+        authors = [(author, 'Not provided') for author in entry['authors'].split('; ')]
+        return (score, arxiv_id, entry['title'], entry['abstract'], view_url, pdf_url, authors)
 
 def main():
-    search_query = 'genomics OR deep learning'
+    search_query = 'deep learning'
     print(f"Using search query: {search_query}")
-    current_date = datetime.now(timezone.utc)
-    print(f"Current date: {current_date.strftime('%Y-%m-%d')}")
-    print(f"Query end date (yesterday): {(current_date - timedelta(days=1)).strftime('%Y-%m-%d')}")
-    print(f"Query start date (1 week ago): {(current_date - timedelta(weeks=1)).strftime('%Y-%m-%d')}")
+
+    biorxiv_adapter = BioRxivAPIAdapter(search_query)
+    biorxiv_articles = biorxiv_adapter.fetch(max_results=None)
     
-    # Fetch from arXiv
-    arxiv_adapter = ArXivAPIAdapter(search_query=f'all:"{search_query}"')
-    arxiv_articles = arxiv_adapter.fetch(time_window='week', max_results=None)
-    print(f"\nTotal arXiv articles within the last week: {len(arxiv_articles)}")
-    
-    # Fetch from bioRxiv
-    biorxiv_adapter = BioRxivAPIAdapter(search_query="genomics OR deep learning")
-    biorxiv_articles = biorxiv_adapter.fetch(time_window='week', max_results=None)
-    print(f"\nTotal bioRxiv articles within the last week: {len(biorxiv_articles)}")
-    print(biorxiv_articles[:2])
-    
+    print(f"\nTotal bioRxiv articles fetched: {len(biorxiv_articles)}")
+    for article in biorxiv_articles[:3]:
+        print(f"Title: {article[2]}")
+        print(f"Score: {article[0]}")
+        print(f"URL: {article[4]}")
+        print("---\n")
+
 if __name__ == "__main__":
     main()
