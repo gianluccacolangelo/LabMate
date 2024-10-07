@@ -86,13 +86,18 @@ class ArXivAPIAdapter:
 
 class BioRxivAPIAdapter:
     def __init__(self, search_query):
-        self.search_query = search_query.lower()
+        # Split the query by 'OR' and strip whitespace
+        self.search_phrases = [phrase.strip().lower() for phrase in search_query.split('OR')]
+        print(f"Search phrases: {self.search_phrases}")
         self.cache = BioRxivCache()
 
     def fetch(self, time_window='week', max_results=None):
         results = []
-        for entry in self.cache.get_articles():
-            if self.search_query in entry['title'].lower() or self.search_query in entry['abstract'].lower():
+        all_articles = self.cache.get_articles()
+        print(f"Searching through {len(all_articles)} articles")
+        for entry in all_articles:
+            score = self._calculate_score(entry)
+            if score > 0:
                 arxiv_id = entry['doi'].split('/')[-1]
                 title = entry['title']
                 abstract = entry['abstract']
@@ -100,16 +105,28 @@ class BioRxivAPIAdapter:
                 pdf_url = f"{view_url}.full.pdf"
                 authors = [(author, 'Not provided') for author in entry['authors'].split('; ')]
                 
-                results.append((arxiv_id, title, abstract, view_url, pdf_url, authors))
-                
-                if max_results and len(results) >= max_results:
-                    break
+                results.append((score, arxiv_id, title, abstract, view_url, pdf_url, authors))
+
+        print(f"Found {len(results)} matching articles")
+        # Sort results by score in descending order
+        results.sort(key=lambda x: x[0], reverse=True)
+
+        if max_results:
+            results = results[:max_results]
 
         print(f"Total bioRxiv articles fetched: {len(results)}")
-        return results
+        return [result[1:] for result in results]  # Remove the score from the final results
+
+    def _calculate_score(self, entry):
+        text = (entry['title'] + ' ' + entry['abstract']).lower()
+        score = sum(any(word in text for word in phrase.split()) for phrase in self.search_phrases)
+        if score > 0:
+            print(f"Matched article: {entry['title']} (Score: {score})")
+        return score
 
 def main():
-    search_query = 'genomics'
+    search_query = 'genomics OR deep learning'
+    print(f"Using search query: {search_query}")
     current_date = datetime.now(timezone.utc)
     print(f"Current date: {current_date.strftime('%Y-%m-%d')}")
     print(f"Query end date (yesterday): {(current_date - timedelta(days=1)).strftime('%Y-%m-%d')}")
@@ -121,9 +138,10 @@ def main():
     print(f"\nTotal arXiv articles within the last week: {len(arxiv_articles)}")
     
     # Fetch from bioRxiv
-    biorxiv_adapter = BioRxivAPIAdapter(search_query=search_query)
+    biorxiv_adapter = BioRxivAPIAdapter(search_query="genomics OR deep learning")
     biorxiv_articles = biorxiv_adapter.fetch(time_window='week', max_results=None)
     print(f"\nTotal bioRxiv articles within the last week: {len(biorxiv_articles)}")
+    print(biorxiv_articles[:2])
     
 if __name__ == "__main__":
     main()
