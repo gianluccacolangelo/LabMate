@@ -13,79 +13,45 @@ from query_builder import QueryBuilder
 from llms import GeminiProvider
 
 class ArXivAPIAdapter:
-    BASE_URL = 'https://export.arxiv.org/api/query?'
+    BASE_URL = 'http://export.arxiv.org/api/query?'
     
-    def __init__(self, search_query, sort_by='submittedDate', sort_order='descending'):
+    def __init__(self, search_query):
         self.search_query = search_query
-        self.sort_by = sort_by
-        self.sort_order = sort_order
 
-    @retry(wait=wait_fixed(5), stop=stop_after_attempt(3), retry=retry_if_exception_type(ConnectionResetError))
-    def _make_request(self, url):
-        response = requests.get(url, headers={'User-Agent': 'YourAppName/1.0 (contact@example.com)'}, timeout=10)
-        response.raise_for_status()
-        return response
-
-    def fetch(self, time_window='week', max_results=None):
-        results = []
-        end_date = datetime.now(timezone.utc) - timedelta(days=1)
-        start_date = end_date - timedelta(weeks=1)
+    def fetch(self, max_results=100, start=0, sort_by='submittedDate', sort_order='descending'):
+        params = {
+            'search_query': self.search_query,
+            'start': start,
+            'max_results': max_results,
+            'sortBy': sort_by,
+            'sortOrder': sort_order
+        }
+        url = self.BASE_URL + urllib.parse.urlencode(params)
+        print(f"Fetching from URL: {url}")
         
-        start = 0
-        batch_size = 100  # ArXiv API allows max 100 results per request
-
-        while True:
-            params = {
-                'search_query': self.search_query,
-                'start': start,
-                'max_results': batch_size,
-                'sortBy': self.sort_by,
-                'sortOrder': self.sort_order
+        response = requests.get(url)
+        response.raise_for_status()
+        
+        feed = feedparser.parse(response.content)
+        
+        results = []
+        for entry in feed.entries:
+            result = {
+                'id': entry.id.split('/abs/')[-1],
+                'title': entry.title,
+                'authors': [author.name for author in entry.authors],
+                'published': datetime.strptime(entry.published, '%Y-%m-%dT%H:%M:%SZ'),
+                'updated': datetime.strptime(entry.updated, '%Y-%m-%dT%H:%M:%SZ'),
+                'summary': entry.summary,
+                'comment': entry.get('arxiv_comment', ''),
+                'journal_ref': entry.get('arxiv_journal_ref', ''),
+                'doi': entry.get('arxiv_doi', ''),
+                'primary_category': entry.arxiv_primary_category.get('term', ''),
+                'categories': [tag.term for tag in entry.tags if tag.scheme.endswith('/schemes/arXiv.org')],
+                'pdf_url': next((link.href for link in entry.links if link.type == 'application/pdf'), None),
             }
-            url = self.BASE_URL + urllib.parse.urlencode(params)
-            print(f"Fetching results {start} to {start + batch_size - 1}...")
-            
-            try:
-                response = self._make_request(url)
-                feed = feedparser.parse(response.content)
-                
-                if not feed.entries:
-                    break
-                
-                for entry in feed.entries:
-                    published_date = datetime.strptime(entry.published, '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc)
-                    if published_date < start_date:
-                        return results  # We've gone past the relevant date range
-                    if published_date <= end_date:
-                        # Extract arXiv ID using regex
-                        arxiv_id_match = re.search(r'arxiv.org/abs/(.*?)v?$', entry.id)
-                        arxiv_id = arxiv_id_match.group(1) if arxiv_id_match else 'No ID found'
-                        
-                        # Generate URLs
-                        view_url = f"https://arxiv.org/abs/{arxiv_id}"
-                        pdf_url = f"https://arxiv.org/pdf/{arxiv_id}.pdf"
-                        
-                        # Extract author information
-                        authors = []
-                        for author in entry.get('authors', []):
-                            name = author.get('name', 'Unknown')
-                            email = author.get('email', 'Not provided')
-                            authors.append((name, email))
-                        
-                        results.append((arxiv_id, entry.title, entry.summary, view_url, pdf_url, authors))
-                
-                if max_results and len(results) >= max_results:
-                    return results[:max_results]
-                
-                if len(feed.entries) < batch_size:
-                    break  # No more results to fetch
-                
-                start += batch_size
-                time.sleep(3)  # Respect API rate limits
-            except requests.exceptions.RequestException as e:
-                print(f"Failed to fetch data: {e}")
-                break
-
+            results.append(result)
+        
         return results
 
 class BioRxivAPIAdapter:
@@ -94,9 +60,21 @@ class BioRxivAPIAdapter:
         self.cache = BioRxivCache()
 
     def _parse_search_query(self, query):
-        # Split by OR first, then by AND
-        or_terms = [term.strip() for term in query.split('OR')]
-        return [term.lower().split('AND') for term in or_terms]
+        # Remove outer parentheses if present
+        query = query.strip('()')
+        # Split by AND
+        and_terms = [term.strip() for term in query.split(' AND ')]
+        parsed_terms = []
+        for term in and_terms:
+            if '(' in term:
+                # This is an OR group
+                or_terms = [t.strip().lower() for t in term.strip('()').split(' OR ')]
+                parsed_terms.append(or_terms)
+            else:
+                # This is a single term
+                parsed_terms.append([term.lower()])
+        print(f"Parsed search terms: {parsed_terms}")
+        return parsed_terms
 
     def fetch(self, max_results=None):
         all_articles = self.cache.get_articles()
@@ -113,11 +91,11 @@ class BioRxivAPIAdapter:
 
     def _calculate_score(self, entry):
         text = f"{entry['title']} {entry['abstract']}".lower()
-        
-        def check_and_terms(and_terms):
-            return all(term in text for term in and_terms)
-        
-        return sum(check_and_terms(and_terms) for and_terms in self.search_terms)
+        score = 0
+        for term_group in self.search_terms:
+            if any(term in text for term in term_group):
+                score += 1
+        return score
 
     def _format_article(self, entry, score):
         arxiv_id = entry['doi'].split('/')[-1]
@@ -140,7 +118,7 @@ def main():
     query_builder = QueryBuilder(llm_provider)
 
     # User's research interest
-    user_interest = "I'm interested in BCI, deep learning and neuroscience"
+    user_interest = "I'm interested in genomics and disease"
     print(f"User interest: {user_interest}")
 
     # Generate queries
@@ -152,19 +130,22 @@ def main():
 
     # Fetch from arXiv
     arxiv_adapter = ArXivAPIAdapter(search_query=arxiv_query)
-    arxiv_articles = arxiv_adapter.fetch(time_window='week', max_results=None)
+    arxiv_articles = arxiv_adapter.fetch(max_results=10)
     
     # If no results, try fallback query
     if not arxiv_articles:
         fallback_query = query_builder.build_fallback_query(user_interest)
         print(f"Fallback arXiv query: {fallback_query}")
         arxiv_adapter = ArXivAPIAdapter(search_query=fallback_query)
-        arxiv_articles = arxiv_adapter.fetch(time_window='week', max_results=None)
+        arxiv_articles = arxiv_adapter.fetch(max_results=10)
 
     print(f"\nTotal arXiv articles fetched: {len(arxiv_articles)}")
     for article in arxiv_articles[:3]:
-        print(f"Title: {article[1]}")
-        print(f"URL: {article[3]}")
+        print(f"Title: {article['title']}")
+        print(f"Authors: {', '.join(article['authors'])}")
+        print(f"Published: {article['published']}")
+        print(f"Summary: {article['summary'][:200]}...")
+        print(f"PDF URL: {article['pdf_url']}")
         print("---")
 
     # Fetch from bioRxiv
@@ -183,6 +164,7 @@ def main():
         print(f"Title: {article[2]}")
         print(f"Score: {article[0]}")
         print(f"URL: {article[4]}")
+        print(f"abstract: {article[3]}")
         print("---")
 
 if __name__ == "__main__":

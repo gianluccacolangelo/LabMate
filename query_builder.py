@@ -13,26 +13,26 @@ class QueryBuilder:
         prompt = f"""
         Given the user's research interests: "{user_interest}"
         Generate a simple arXiv search query that:
-        1. Identify one main concept
+        1. Identify one main concept and at least 4 to 6 variations. For example, if the main concept is "deep learning", the variations could be "AI","Artificial intelligence","machine learning","neural networks","deep neural networks", etc.
         2. Identify 2-3 key concepts connected by OR
         3. Is broad enough to capture relevant papers
         4. Does not use complex syntax
-        5. Is formatted as: all:"main concept ADN (ohter OR other)"
+        5. Is formatted in a way that has variations of the main concept AND other key concepts: ("main concept" OR "variation" OR "variation" ...) AND ("other" OR "other" )
         
         Return only the query string, without any additional text or explanations.
         """
         query = self.llm_provider.generate_query(prompt)
-        return f'all:"{query.strip()}"'
+        return f'all:({query.strip()})'
 
     def build_biorxiv_query(self, user_interest: str) -> str:
         prompt = f"""
         Given the user's research interests: "{user_interest}"
         Generate a simple bioRxiv search query that:
-        1. Identify one main concept
+        1. Identify one main concept and at least 4 to 6 variations. For example, if the main concept is "deep learning", the variations could be "AI","Artificial intelligence","machine learning","neural networks","deep neural networks", etc.
         2. Identify 2-3 key concepts connected by OR
         3. Is broad enough to capture relevant papers
         4. Does not use complex syntax
-        5. Follows this format: "main concept AND (other OR other)"
+        5. Follows this format: ("main concept" OR "variation" OR "variation" ...) AND ("other" OR "other" )
         
         Return only the query string, without any additional text or explanations.
         """
