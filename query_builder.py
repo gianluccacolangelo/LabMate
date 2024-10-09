@@ -32,7 +32,7 @@ class QueryBuilder:
         2. Identify 2-3 key concepts connected by OR
         3. Is broad enough to capture relevant papers
         4. Does not use complex syntax
-        5. Follows this format: ("main concept" OR "variation" OR "variation" ...) AND ("other" OR "other" )
+        5. Follows this format: (main concept OR variation OR variation ...) AND (other OR other)
         
         Return only the query string, without any additional text or explanations.
         """

@@ -66,7 +66,7 @@ class BioRxivAPIAdapter:
         and_terms = [term.strip() for term in query.split(' AND ')]
         parsed_terms = []
         for term in and_terms:
-            if '(' in term:
+            if '(' in term or ')' in term:
                 # This is an OR group
                 or_terms = [t.strip().lower() for t in term.strip('()').split(' OR ')]
                 parsed_terms.append(or_terms)
@@ -76,16 +76,19 @@ class BioRxivAPIAdapter:
         print(f"Parsed search terms: {parsed_terms}")
         return parsed_terms
 
-    def fetch(self, max_results=None):
+    def fetch(self, max_results=None, score_threshold=0.99):  # Set a high threshold
         all_articles = self.cache.get_articles()
         results = []
+        print(f"Total articles in cache: {len(all_articles)}")
+        print(f"Search terms: {self.search_terms}")
 
         for entry in all_articles:
             score = self._calculate_score(entry)
-            if score > 0:
+            if score >= score_threshold:
                 result = self._format_article(entry, score)
                 results.append(result)
 
+        print(f"Total matching articles: {len(results)}")
         results.sort(key=lambda x: x[0], reverse=True)
         return results[:max_results] if max_results else results
 
@@ -95,7 +98,9 @@ class BioRxivAPIAdapter:
         for term_group in self.search_terms:
             if any(term in text for term in term_group):
                 score += 1
-        return score
+            else:
+                return 0  # If any term group is not represented, return 0
+        return score / len(self.search_terms)  # Normalize score between 0 and 1
 
     def _format_article(self, entry, score):
         arxiv_id = entry['doi'].split('/')[-1]
@@ -118,7 +123,7 @@ def main():
     query_builder = QueryBuilder(llm_provider)
 
     # User's research interest
-    user_interest = "I'm interested in genomics and disease"
+    user_interest = "I'm interested in how multi-omics data along with deep learning models can help understand diseases and aging"
     print(f"User interest: {user_interest}")
 
     # Generate queries
@@ -162,9 +167,9 @@ def main():
     print(f"\nTotal bioRxiv articles fetched: {len(biorxiv_articles)}")
     for article in biorxiv_articles[:3]:
         print(f"Title: {article[2]}")
-        print(f"Score: {article[0]}")
+        print(f"Score: {article[0]:.2f}")
         print(f"URL: {article[4]}")
-        print(f"abstract: {article[3]}")
+        print(f"Abstract: {article[3][:200]}...")
         print("---")
 
 if __name__ == "__main__":
