@@ -30,9 +30,13 @@ class PyPDF2Reader(PdfReaderStrategy):
         # Remove extra spaces while preserving paragraphs
         text = '\n'.join(' '.join(line.split()) for line in text.split('\n'))
         
-        # Remove references pattern [X], [X,Y], [X-Y] and the references themselves
+        # Remove references and everything that follows
         import re
-        text = re.sub(r'\[\d+(?:[-,]\d+)*\].*?(?=\[|\n|$)', '', text)
+        keywords = r'references|bibliography|works cited|literature cited'
+        text = re.split(f'(?i){keywords}', text)[0]
+        
+        # Remove references pattern [X], [X,Y], [X-Y]
+        text = re.sub(r'\[\d+(?:[-,]\d+)*\]', '', text)
         
         # Remove email addresses
         text = re.sub(r'\S+@\S+', '', text)
@@ -47,7 +51,6 @@ class PyPDF2Reader(PdfReaderStrategy):
         text = re.sub(r'[^\w\s.,]', '', text)
         
         return text.strip()
-
 class PdfPlumberReader(PdfReaderStrategy):
     def read(self,url:str):
         response = requests.get(url)
@@ -65,9 +68,13 @@ class PdfPlumberReader(PdfReaderStrategy):
         # Remove extra spaces while preserving paragraphs
         text = '\n'.join(' '.join(line.split()) for line in text.split('\n'))
         
-        # Remove references pattern [X], [X,Y], [X-Y] and the references themselves
+        # Remove references and everything that follows
         import re
-        text = re.sub(r'\[\d+(?:[-,]\d+)*\].*?(?=\[|\n|$)', '', text)
+        keywords = r'references|bibliography|works cited|literature cited'
+        text = re.split(f'(?i){keywords}', text)[0]
+        
+        # Remove references pattern [X], [X,Y], [X-Y]
+        text = re.sub(r'\[\d+(?:[-,]\d+)*\]', '', text)
         
         # Remove email addresses
         text = re.sub(r'\S+@\S+', '', text)
@@ -83,7 +90,7 @@ class PdfPlumberReader(PdfReaderStrategy):
         
         return text.strip()
 class PdfReader:
-    def __init__(self,reader:PdfReaderStrategy = PdfPlumberReader()):
+    def __init__(self,reader:PdfReaderStrategy = PyPDF2Reader()):
         self.reader = reader
 
     def read(self,url:str):
