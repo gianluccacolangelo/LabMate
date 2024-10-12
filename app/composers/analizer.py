@@ -22,7 +22,7 @@ class PaperAnalyzer:
 
     def analyze_papers(self, vectorized_user_interests: np.ndarray, user_interests: str) -> List[Dict[str, Any]]:
         # Get top 20 similar papers
-        similar_papers = self.vector_db.search(vectorized_user_interests, top_k=10)
+        similar_papers = self.vector_db.search(vectorized_user_interests, top_k=40)
         print(f'similar papers: {similar_papers}')
 
         # Extract abstracts from PDFs
@@ -36,7 +36,7 @@ class PaperAnalyzer:
                 print(f"Error fetching abstract for paper {paper}: {e}")
 
         # Use LLM to choose 1-3 papers
-        chosen_papers = self._choose_papers(abstracts[:100000], user_interests)
+        chosen_papers = self._choose_papers(abstracts, user_interests)
 
         return chosen_papers
 
@@ -45,8 +45,6 @@ class PaperAnalyzer:
         llm_response = self.llm_provider.generate_query(prompt)
         print(f'llm response: {llm_response}')
         chosen_paper_ids = self._parse_llm_response(llm_response)
-        print(f'chosen paper ids: {chosen_paper_ids}')
-
         chosen_papers = [paper for paper in abstracts if paper['id'] in chosen_paper_ids]
         return chosen_papers
 
@@ -54,18 +52,19 @@ class PaperAnalyzer:
         prompt = (
             f"You are a highly selective research assistant. Your task is to choose between 1 and 3 papers from the "
             f"following abstracts, based on their relevance to the user's interests and potential impact. "
-            f"The user's interests are: {user_interests}\n\n"
+            f"The user's interests are: '''{user_interests}'''\n\n"
             f"Be extremely conservative in your selection; it's better to choose fewer papers than more. "
             f"If no papers seem truly exceptional or closely related to the user's interests, select at least one."
-            f"Here are the abstracts:\n\n"
+            f"Here are the abstracts:\n\n ''' \n"
         )
         for i, paper in enumerate(abstracts, 1):
-            prompt += f"Paper {i} (ID: {paper['id']}):\n{paper['abstract'][:10000]}\n\n"
+            prompt += f"Paper (ID: {paper['id']}):\n{paper['abstract']}\n\n"
         prompt += (
-            "Please provide your selection in the following format:\n"
+            "''' \nPlease provide your selection in the following format:\n"
             "Selected Paper IDs: [list of selected paper IDs, or 'None' if no papers are selected]\n"
             "Reasoning: [brief explanation for your choices, relating them to the user's interests]"
         )
+        print(f'prompt: {prompt}')
         return prompt
 
     def _parse_llm_response(self, llm_response: str) -> List[str]:
