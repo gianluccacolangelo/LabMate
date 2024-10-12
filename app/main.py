@@ -1,11 +1,17 @@
 from app.composers.analizer import PaperAnalyzerFactory
 
+import os
+from dotenv import load_dotenv
+
 def main():
+    # Load environment variables
+    load_dotenv()
+
     # Configuration
     config = {
         'data_dir': 'data',
         'vector_dimension': 768,
-        'gemini_api_key': 'your api key here',
+        'gemini_api_key': os.getenv('API_KEY'),
         'bert_model_name': 'bert-base-uncased'
     }
 
