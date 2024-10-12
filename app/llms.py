@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 import google.generativeai as genai
+from google.generativeai import GenerationConfig
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from google.api_core.exceptions import ResourceExhausted
 
@@ -33,9 +34,16 @@ class AnthropicProvider(LLMProvider):
 
 
 class GeminiProvider(LLMProvider):
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, model_name: str = "gemini-1.5-flash"):
         genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel("gemini-1.0-pro-latest")
+        self.model_name = model_name
+        self.model = genai.GenerativeModel(model_name)
+        self.model_info = genai.get_model(f"models/{model_name}")
+        
+        # Print model name and token limits
+        print(f"Model: {model_name}")
+        print(f"Input token limit: {self.model_info.input_token_limit}")
+        print(f"Output token limit: {self.model_info.output_token_limit}")
 
     @retry(
         stop=stop_after_attempt(15),
@@ -49,4 +57,3 @@ class GeminiProvider(LLMProvider):
         except ResourceExhausted as e:
             print(f"Rate limit exceeded. Retrying... (Error: {e})")
             raise
-
