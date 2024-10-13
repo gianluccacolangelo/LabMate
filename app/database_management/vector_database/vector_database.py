@@ -50,6 +50,8 @@ class FaissVectorDatabase(VectorDatabase):
             vector (np.ndarray): The vector to be added.
             metadata (Dict[str, Any]): Additional information about the vector.
         """
+        if vector.shape[0] != self.dimension:
+            raise ValueError(f"Vector dimension {vector.shape[0]} does not match index dimension {self.dimension}")
         self.index.add(vector.reshape(1, -1))
         self.id_to_metadata[self.index.ntotal - 1] = {"id": id, **metadata}
 
