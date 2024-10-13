@@ -2,6 +2,7 @@ from transformers import BertTokenizer, BertModel
 import torch
 from app.database_management.vectorizer.vectorizer_interface import IVectorizer
 import numpy as np
+from sentence_transformers import SentenceTransformer
 
 class BertVectorizer(IVectorizer):
     def __init__(self, model_name='bert-base-uncased'):
@@ -14,3 +15,14 @@ class BertVectorizer(IVectorizer):
         with torch.no_grad():
             outputs = self.model(**inputs)
         return outputs.last_hidden_state.mean(dim=1).squeeze().numpy()
+
+
+class HuggingFaceVectorizer(IVectorizer):
+    def __init__(self, model_name: str = 'paraphrase-MiniLM-L6-v2'):
+        # Load pre-trained SBERT model
+        self.model = SentenceTransformer(model_name)
+
+    def vectorize_text(self, text: str) -> np.ndarray:
+        # Use the SBERT model to generate a vector representation of the input text
+        embedding = self.model.encode(text)
+        return np.array(embedding)
