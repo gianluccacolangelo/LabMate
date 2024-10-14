@@ -11,6 +11,10 @@ MailComposer: He's a storyteller, he knows how to tell a story and make it engag
 """
 from abc import ABC, abstractmethod
 from app.llms import GeminiProvider
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class Composer(ABC):
     @abstractmethod
@@ -19,9 +23,10 @@ class Composer(ABC):
 
 class TechnicalComposer(Composer):
     def compose(self, paper, user_interest, temperature=0.0):
-        llm = GeminiProvider(model_name="gemini-1.5-pro-latest", temperature=temperature)
+        llm = GeminiProvider(model_name="gemini-1.5-pro-latest", api_key=os.getenv("API_KEY"), temperature=temperature)
         personality = """
         You look for the techniques that were used in a paper, you appretiate how these techniques were used to answer specific question/hypothesis, you find how they can be applicable for users interests, you like to quickly think computationally and say things like 'oh, we'll need a module that does this, and another one that receives this, and use this or that tool...'
+        You're an engineer and you're very good at understanding how to implement things.
 """
         prompt = f"""This is your personality: '''{personality}'''
 
@@ -37,7 +42,7 @@ class TechnicalComposer(Composer):
 
 class PhilosopherComposer(Composer):
     def compose(self, paper, user_interest, temperature=1.0):
-        llm = GeminiProvider(model_name="gemini-1.5-pro-latest", temperature=temperature)
+        llm = GeminiProvider(model_name="gemini-1.5-pro-latest", api_key=os.getenv("API_KEY"), temperature=temperature)
         personality = """
         You take a step up and look things from a bigger picture, you're a generalist and think what big questions this paper is tackling. You're also a critical thinker, and you believe in science and progress when the right questions are made, you think we all will be benefited from clarity in our thinking and you always force us to clearly define the concepts we use and the pre-assumptions we made.
 """
@@ -52,7 +57,7 @@ class PhilosopherComposer(Composer):
 
 class FirstPrinciplesComposer(Composer):
     def compose(self, paper, user_interest, temperature=0.0):
-        llm = GeminiProvider(model_name="gemini-1.5-pro-latest", temperature=temperature)
+        llm = GeminiProvider(model_name="gemini-1.5-pro-latest", api_key=os.getenv("API_KEY"), temperature=temperature)
         personality = """
         You look for generalizations. You read the paper and try to find general rules and expose them in a simple and reminiscent way.
 """
@@ -67,7 +72,7 @@ class FirstPrinciplesComposer(Composer):
 
 class HistoryOfScienceComposer(Composer):
     def compose(self, paper, user_interest, temperature=0.0):
-        llm = GeminiProvider(model_name="gemini-1.5-pro-latest", temperature=temperature)
+        llm = GeminiProvider(model_name="gemini-1.5-pro-latest", api_key=os.getenv("API_KEY"), temperature=temperature)
         personality = """
         You're always reminding episodes of great scientists when they're are relevant for the current paper. Somehow is always relating some part of the paper with very inspiring anecdotes.
 """
@@ -83,9 +88,10 @@ class HistoryOfScienceComposer(Composer):
 class MailComposer(Composer):
     def compose(self, paper, technical_analysis, philosopher_analysis, first_principles_analysis, history_of_science_analysis, 
                 user_interest, temperature=2.0):
-        llm = GeminiProvider(model_name="gemini-1.5-pro-latest", temperature=temperature)
+        llm = GeminiProvider(model_name="gemini-1.5-pro-latest", api_key=os.getenv("API_KEY"), temperature=temperature)
         personality = """
-        You're a storyteller, you know how to tell a story and make it engaging using one main principle: expectations. You know how to generate expectations in the reader and then you satisfies them, but always let him wanting more.
+        You're a storyteller, you know how to tell a story and make it engaging using one main principle: expectations. You know how to generate expectations in the reader and then you satisfies them.
+        Importantly, you're an erudite and a little bit arrogant, you are not agraid of getting into technical details although you know explain them in a simple way. You're serious.
 """
         prompt = f"""This is your personality: '''{personality}'''
 
@@ -103,7 +109,7 @@ class MailComposer(Composer):
 
         History of science analysis: '''{history_of_science_analysis}'''
 
-        Now with that information you've gathered, you're ready orchestate a compelling mail to the user using the different analysis to address his interests.
+        Now with that information you've gathered, you're ready orchestate a compelling mail that uses the central information of each one of the analyses (don't rewrite them too much, and keep the essence of each analysis). That is the technical analysis, the philosophical questions, the first principles generalizations and the history. You'll create expectations with simple words, and inspire the user to put hands on to build something amazing.
         """
         response = llm.generate_query(prompt)
         return response
