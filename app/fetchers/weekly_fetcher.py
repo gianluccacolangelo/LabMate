@@ -1,7 +1,7 @@
 import json
 from datetime import datetime, timedelta
 from typing import List, Dict, Union
-from fetchers.fetchers import ArXivRetriever, BioRxivRetriever
+from app.fetchers.fetchers import ArXivRetriever, BioRxivRetriever
 
 class WeeklyArticleFetcher:
     def __init__(self):
