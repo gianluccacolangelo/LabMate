@@ -34,14 +34,22 @@ class AnthropicProvider(LLMProvider):
 
 
 class GeminiProvider(LLMProvider):
-    def __init__(self, api_key: str, model_name: str = "gemini-1.5-flash"):
+    def __init__(self, api_key: str, model_name: str = "gemini-1.5-flash", temperature: float = 0.0):
         genai.configure(api_key=api_key)
         self.model_name = model_name
-        self.model = genai.GenerativeModel(model_name)
+        self.temperature = temperature
+        
+        # Create GenerationConfig with temperature
+        generation_config = GenerationConfig(temperature=self.temperature)
+        
+        # Initialize the model with the generation config
+        self.model = genai.GenerativeModel(model_name=model_name, generation_config=generation_config)
+        
         self.model_info = genai.get_model(f"models/{model_name}")
         
-        # Print model name and token limits
+        # Print model name, temperature, and token limits
         print(f"Model: {model_name}")
+        print(f"Temperature: {temperature}")
         print(f"Input token limit: {self.model_info.input_token_limit}")
         print(f"Output token limit: {self.model_info.output_token_limit}")
 

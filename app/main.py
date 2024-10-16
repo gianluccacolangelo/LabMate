@@ -1,4 +1,9 @@
 from app.composers.analizer import PaperAnalyzerFactory
+from app.fetchers.pdf_handling import PdfReader
+from app.composers.thinkers import (
+    TechnicalComposer, PhilosopherComposer, FirstPrinciplesComposer,
+    HistoryOfScienceComposer, MailComposer
+)
 
 import os
 from dotenv import load_dotenv
@@ -12,7 +17,10 @@ def main():
         'data_dir': 'data',
         'vector_dimension': 768,
         'gemini_api_key': os.getenv('API_KEY'),
-        'bert_model_name': 'bert-base-uncased'
+        'bert_model_name': 'BAAI/bge-base-en-v1.5',
+        'index_file': 'bge_vector_database_faiss_index_20241015.bin',
+        'metadata_file': 'bge_vector_database_metadata_20241015.pkl',
+        'top_k': 20 
     }
 
     # Create factory
@@ -24,27 +32,56 @@ def main():
 
     # Example usage
 
-    user_interests = """ The complexity of aging and age-related diseases remains one of the most profound challenges in biomedical research. Recent advances in high-throughput sequencing technologies have revealed that non-coding regions of the genome, comprising regulatory elements, enhancers, and long non-coding RNAs (lncRNAs), play a significant role in modulating gene expression and cellular pathways related to disease progression and the aging process. However, deciphering these vast, uncharted territories requires sophisticated computational techniques. In this paper, we present a deep learning framework to integrate multi-omics data and uncover the functional relevance of non-coding regions in disease and aging mechanisms.
-
-Our approach employs deep neural networks (DNNs) to fuse data from multiple omics layers, including genomics, transcriptomics, epigenomics, and proteomics, with a focus on interpreting the regulatory impact of non-coding variants. By training the model on large-scale datasets, such as The Cancer Genome Atlas (TCGA) and the Genotype-Tissue Expression (GTEx) project, we identify non-coding elements that correlate with age-related phenotypes and disease susceptibility. The model incorporates feature selection techniques to prioritize regions of interest, such as promoters, enhancers, and non-coding RNAs, that exhibit significant regulatory influence on key aging-related pathways, including inflammation, senescence, and cellular stress responses.
-
-Experimental validation in in vitro and in vivo aging models confirms that several non-coding regulatory elements, particularly lncRNAs and enhancer RNAs (eRNAs), modulate gene networks involved in metabolic regulation, immune response, and tissue regeneration. Additionally, the application of attention mechanisms in the deep learning model enables the identification of specific non-coding mutations associated with age-related diseases such as cancer, neurodegeneration, and cardiovascular disease.
-
-Our results underscore the potential of deep learning to disentangle the complex regulatory roles of non-coding regions in the genome, providing insights into novel therapeutic targets for combating aging and its associated diseases. This study highlights the importance of integrating multi-omics data to gain a comprehensive understanding of genome regulation beyond coding regions, offering a path forward in personalized medicine and anti-aging interventions.
-
-Keywords: Deep Learning, Multi-Omics, Non-Coding Regions, Aging, Disease, lncRNA, Enhancers, Epigenomics, Regulatory Networks, Genome-Wide Association Studies (GWAS), Cancer, Neurodegeneration.
+    user_interests = """
+Our group aims to further our understanding of the human genome by computational integration of large-scale functional and comparative genomics datasets. (1) We use comparative genomics of multiple related species to recognize evolutionary signatures of protein-coding genes, RNA structures, microRNAs, regulatory motifs, and individual regulatory elements. (2) We use combinations of epigenetic modifications to define chromatin states associated with distinct functions, including promoter, enhancer, transcribed, and repressed regions, each with distinct functional properties. (3) We use dynamics of functional elements across many cell types to link regulatory regions to their target genes, predict activators and repressors, and cell type specific regulatory action. (4) We combine these evolutionary, chromatin, and activity signatures to dramatically expand the annotation of the non-coding genome, elucidate the regulatory circuitry of the human and fly genomes, and to revisit previously uncharacterized disease-associated variants, providing mechanistic insights into their likely molecular roles
 """
-    
+
 
     vectorized_user_interests = vectorizer.vectorize_text(user_interests)
 
     # Analyze papers
     chosen_papers = analyzer.analyze_papers(vectorized_user_interests, user_interests)
 
-    # Print results
-    print("Chosen papers:")
-    for paper in chosen_papers:
-        print(f"- {paper['id']}: {paper['abstract'][:1000]}...")  # Print first 100 characters of abstract
+    # Select the first paper for detailed analysis
+    if chosen_papers:
+        selected_paper = chosen_papers[0]
+        pdf_url = selected_paper['pdf_url']
+        
+        # Create a PdfReader instance and read the PDF
+        pdf_reader = PdfReader()
+        print(f"Reading the PDF file: {pdf_url}")
+        pdf_content = pdf_reader.read(pdf_url)
+        print(f"PDF file read: {pdf_content[:100]} (...)")
+
+        # Initialize composers
+        technical_composer = TechnicalComposer()
+        philosopher_composer = PhilosopherComposer()
+        first_principles_composer = FirstPrinciplesComposer()
+        history_of_science_composer = HistoryOfScienceComposer()
+        mail_composer = MailComposer()
+
+        # Perform analyses
+        technical_analysis = technical_composer.compose(pdf_content, user_interests, temperature=0.0)
+        philosopher_analysis = philosopher_composer.compose(pdf_content, user_interests, temperature=1.0)
+        first_principles_analysis = first_principles_composer.compose(pdf_content, user_interests, temperature=1.0)
+        #history_of_science_analysis = history_of_science_composer.compose(pdf_content, user_interests, temperature=1.0)
+
+        # Generate final mail
+        mail = mail_composer.compose(
+            pdf_content, technical_analysis, philosopher_analysis,
+            first_principles_analysis, None,
+            user_interests, temperature=0.5
+        )
+
+        # Print results
+        print("\n--- Analysis Results ---")
+        print(f"Technical Analysis: {technical_analysis[:100]}...")
+        print(f"Philosopher Analysis: {philosopher_analysis[:100]}...")
+        print(f"First Principles Analysis: {first_principles_analysis[:100]}...")
+        #print(f"History of Science Analysis: {history_of_science_analysis[:100]}...")
+        print(f"\n--- Final Mail ---\n{mail}")
+    else:
+        print("No papers were found matching the user's interests.")
 
 if __name__ == "__main__":
     main()

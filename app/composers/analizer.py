@@ -15,25 +15,24 @@ import numpy as np
 import os
 
 class PaperAnalyzer:
-    def __init__(self, vector_db: FaissVectorDatabase, pdf_reader: PdfReader, llm_provider: GeminiProvider):
+    def __init__(self, vector_db: FaissVectorDatabase, pdf_reader: PdfReader, llm_provider: GeminiProvider, top_k: int = 40):
         self.vector_db = vector_db
         self.pdf_reader = pdf_reader
         self.llm_provider = llm_provider
+        self.top_k = top_k
 
     def analyze_papers(self, vectorized_user_interests: np.ndarray, user_interests: str) -> List[Dict[str, Any]]:
         # Get top 20 similar papers
-        similar_papers = self.vector_db.search(vectorized_user_interests, top_k=40)
-        print(f'similar papers: {similar_papers}')
+        similar_papers = self.vector_db.search(vectorized_user_interests, top_k=self.top_k)
 
         # Extract abstracts from PDFs
         abstracts = []
         for paper in similar_papers:
-            print(f"Fetching abstract for paper {paper}")
             try:
                 abstract = self.pdf_reader.read(paper['pdf_url'])
-                abstracts.append({"id": paper['id'], "abstract": abstract})
+                abstracts.append({"pdf_url": paper['pdf_url'], "id": paper['id'], "abstract": abstract})
             except Exception as e:
-                print(f"Error fetching abstract for paper {paper}: {e}")
+                pass
 
         # Use LLM to choose 1-3 papers
         chosen_papers = self._choose_papers(abstracts, user_interests)
@@ -43,11 +42,16 @@ class PaperAnalyzer:
     def _choose_papers(self, abstracts: List[Dict[str, str]], user_interests: str) -> List[Dict[str, Any]]:
         prompt = self._create_paper_selection_prompt(abstracts, user_interests)
         llm_response = self.llm_provider.generate_query(prompt)
-        print(f'llm response: {llm_response}')
         chosen_paper_ids = self._parse_llm_response(llm_response)
-        chosen_papers = [paper for paper in abstracts if paper['id'] in chosen_paper_ids]
+        chosen_papers = [
+            {
+                'id': paper['id'],
+                'abstract': paper['abstract'],
+                'pdf_url': paper['pdf_url']
+            }
+            for paper in abstracts if paper['id'] in chosen_paper_ids
+        ]
         return chosen_papers
-
     def _create_paper_selection_prompt(self, abstracts: List[Dict[str, str]], user_interests: str) -> str:
         prompt = (
             f"You are a highly selective research assistant. Your task is to choose between 1 and 3 papers from the "
@@ -64,7 +68,6 @@ class PaperAnalyzer:
             "Selected Paper IDs: [list of selected paper IDs, or 'None' if no papers are selected]\n"
             "Reasoning: [brief explanation for your choices, relating them to the user's interests]"
         )
-        print(f'prompt: {prompt}')
         return prompt
 
     def _parse_llm_response(self, llm_response: str) -> List[str]:
@@ -86,17 +89,21 @@ class PaperAnalyzer:
 class PaperAnalyzerFactory:
     def __init__(self, config: Dict[str,Any]):
         self.config = config
+        self.data_dir = config['data_dir']
+        self.index_file = config['index_file']
+        self.metadata_file = config['metadata_file']
+        self.top_k = config['top_k']
 
     def analyzer(self) -> PaperAnalyzer:
-        vector_db = self._create_vector_db()
+        vector_db = self._create_vector_db(self.index_file, self.metadata_file)
         pdf_reader = self._create_pdf_reader()
         llm_provider = self._create_llm_provider()
-        return PaperAnalyzer(vector_db, pdf_reader, llm_provider)
+        return PaperAnalyzer(vector_db, pdf_reader, llm_provider, self.top_k)
     
-    def _create_vector_db(self) -> FaissVectorDatabase:
+    def _create_vector_db(self,index_file: str, metadata_file: str) -> FaissVectorDatabase:
         data_dir = self.config['data_dir']
-        index_file = os.path.join(data_dir, 'faiss_index.bin')
-        metadata_file = os.path.join(data_dir, 'metadata.pkl')
+        index_file = os.path.join(data_dir, index_file)
+        metadata_file = os.path.join(data_dir, metadata_file)
         vector_db  = FaissVectorDatabase(
             dimension=self.config['vector_dimension'],
             index_file=index_file,
@@ -112,9 +119,3 @@ class PaperAnalyzerFactory:
 
     def create_vectorizer(self) -> BertVectorizer:
         return BertVectorizer(model_name=self.config['bert_model_name'])
-
-
-
-
-# Usage example:
-# config

@@ -97,7 +97,7 @@ class MailComposer(Composer):
 
         These are the user's interests: '''{user_interest}'''
 
-        This is the paper: '''{paper}'''
+        This paper may be relevant for the user's interests: '''{paper}'''
 
         And this is what you're different colleagues has written about the paper:
 
