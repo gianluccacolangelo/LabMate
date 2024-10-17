@@ -10,12 +10,12 @@ from typing import List, Dict, Any
 from app.fetchers.pdf_handling import PdfReader
 from app.database_management.vector_database.vector_database import FaissVectorDatabase
 from app.database_management.vectorizer.bert import BertVectorizer
-from app.composers.llms import GeminiProvider
+from app.composers.llms import LLMFactory, LLMProvider
 import numpy as np
 import os
 
 class PaperAnalyzer:
-    def __init__(self, vector_db: FaissVectorDatabase, pdf_reader: PdfReader, llm_provider: GeminiProvider, top_k: int = 40):
+    def __init__(self, vector_db: FaissVectorDatabase, pdf_reader: PdfReader, llm_provider: LLMProvider, top_k: int = 40):
         self.vector_db = vector_db
         self.pdf_reader = pdf_reader
         self.llm_provider = llm_provider
@@ -87,12 +87,14 @@ class PaperAnalyzer:
         return re.findall(id_pattern, id_string)
 
 class PaperAnalyzerFactory:
-    def __init__(self, config: Dict[str,Any]):
+    def __init__(self, config: Dict[str, Any]):
         self.config = config
         self.data_dir = config['data_dir']
         self.index_file = config['index_file']
         self.metadata_file = config['metadata_file']
         self.top_k = config['top_k']
+        self.llm_provider = config.get('llm_provider', 'gemini')
+        self.llm_config = config.get('llm_config', {})
 
     def analyzer(self) -> PaperAnalyzer:
         vector_db = self._create_vector_db(self.index_file, self.metadata_file)
@@ -100,11 +102,11 @@ class PaperAnalyzerFactory:
         llm_provider = self._create_llm_provider()
         return PaperAnalyzer(vector_db, pdf_reader, llm_provider, self.top_k)
     
-    def _create_vector_db(self,index_file: str, metadata_file: str) -> FaissVectorDatabase:
+    def _create_vector_db(self, index_file: str, metadata_file: str) -> FaissVectorDatabase:
         data_dir = self.config['data_dir']
         index_file = os.path.join(data_dir, index_file)
         metadata_file = os.path.join(data_dir, metadata_file)
-        vector_db  = FaissVectorDatabase(
+        vector_db = FaissVectorDatabase(
             dimension=self.config['vector_dimension'],
             index_file=index_file,
             metadata_file=metadata_file)
@@ -114,8 +116,9 @@ class PaperAnalyzerFactory:
     def _create_pdf_reader(self) -> PdfReader:
         return PdfReader()
     
-    def _create_llm_provider(self) -> GeminiProvider:
-        return GeminiProvider(api_key=self.config['gemini_api_key'])
+    def _create_llm_provider(self) -> LLMProvider:
+        api_key = self.config.get('api_key', os.getenv('API_KEY'))
+        return LLMFactory.create_provider(self.llm_provider, api_key, **self.llm_config)
 
     def create_vectorizer(self) -> BertVectorizer:
         return BertVectorizer(model_name=self.config['bert_model_name'])
