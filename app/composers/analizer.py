@@ -10,7 +10,7 @@ from typing import List, Dict, Any
 from app.fetchers.pdf_handling import PdfReader
 from app.database_management.vector_database.vector_database import FaissVectorDatabase
 from app.database_management.vectorizer.bert import BertVectorizer
-from app.llms import GeminiProvider
+from app.composers.llms import GeminiProvider
 import numpy as np
 import os
 
