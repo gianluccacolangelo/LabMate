@@ -6,9 +6,12 @@ from app.database_management.vector_database.abstract_processing import Abstract
 
 def main():
     # Define paths
+    from datetime import datetime
+
     data_dir = 'data'
-    index_file = os.path.join(data_dir, 'bge_vector_database_faiss_index_20241015.bin')
-    metadata_file = os.path.join(data_dir, 'bge_vector_database_metadata_20241015.pkl')
+    current_date = datetime.now().strftime('%Y%m%d')
+    index_file = os.path.join(data_dir, f'bge_vector_database_faiss_index_{current_date}.bin')
+    metadata_file = os.path.join(data_dir, f'bge_vector_database_metadata_{current_date}.pkl')
 
     # Ensure data directory exists
     os.makedirs(data_dir, exist_ok=True)
@@ -22,7 +25,7 @@ def main():
     processing_service = AbstractProcessingService(vectorizer, vector_database)
 
     # Process and store abstracts
-    processing_service.process_and_store_abstracts('database/weekly_articles_20241015.json')
+    processing_service.process_and_store_abstracts(f'database/weekly_articles_{current_date}.json')
 
     print(f"\nTotal vectors in database: {len(vector_database)}")
 
